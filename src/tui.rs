@@ -39,6 +39,7 @@ pub struct App {
     pub new_title: String,
     pub new_content: String,
     pub status_msg: Option<String>,
+    pub show_shortcuts: bool,
     pub should_quit: bool,
 }
 
@@ -56,6 +57,7 @@ impl App {
             new_title: String::new(),
             new_content: String::new(),
             status_msg: None,
+            show_shortcuts: true,
             should_quit: false,
         };
         app.update_filter();
@@ -208,6 +210,14 @@ pub fn run_tui(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
                 match app.input_mode {
                     InputMode::Normal => match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
+                        KeyCode::Char('?') | KeyCode::Char('h') => {
+                            app.show_shortcuts = !app.show_shortcuts;
+                            app.status_msg = Some(if app.show_shortcuts {
+                                "Atajos mostrados [? para ocultar]".to_string()
+                            } else {
+                                "Atajos ocultados [? para mostrar]".to_string()
+                            });
+                        }
                         KeyCode::Char('j') | KeyCode::Down => {
                             if !app.filtered_indices.is_empty()
                                 && app.selected_idx + 1 < app.filtered_indices.len()
@@ -311,12 +321,13 @@ pub fn run_tui(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn ui(f: &mut Frame, app: &mut App) {
+    let footer_height = if app.show_shortcuts { 3 } else { 2 };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // Header & search
             Constraint::Min(5),    // Main panes
-            Constraint::Length(2), // Help footer & status
+            Constraint::Length(footer_height), // Help footer & status
         ])
         .split(f.area());
 
@@ -326,7 +337,11 @@ fn ui(f: &mut Frame, app: &mut App) {
         _ => Style::default().fg(Color::DarkGray),
     };
     let search_title = if app.search_query.is_empty() {
-        " Buscar con '/' | [n] Nueva | [y] Copiar | [e] Editar | [d] Borrar | [q] Salir "
+        if app.input_mode == InputMode::Search {
+            " Escribe para buscar en tiempo real... [Esc/Enter salir de búsqueda] "
+        } else {
+            " 🔍 Buscar [/] • Atajos [?] "
+        }
     } else {
         " Filtrando notas "
     };
@@ -408,21 +423,52 @@ fn ui(f: &mut Frame, app: &mut App) {
         .wrap(Wrap { trim: false });
     f.render_widget(preview_widget, main_chunks[1]);
 
-    // 3. Footer status
-    let status_text = if let Some(ref msg) = app.status_msg {
+    // 3. Footer status & shortcuts
+    let mut footer_lines = Vec::new();
+
+    if app.show_shortcuts {
+        let shortcuts_line = Line::from(vec![
+            Span::styled(" [j/k]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Mover  "),
+            Span::styled("[n]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Nueva  "),
+            Span::styled("[/]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Buscar  "),
+            Span::styled("[y]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Copiar  "),
+            Span::styled("[e]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Editar  "),
+            Span::styled("[d]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Borrar  "),
+            Span::styled("[?]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Ocultar Atajos  "),
+            Span::styled("[q/Esc]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Salir"),
+        ]);
+        footer_lines.push(shortcuts_line);
+    }
+
+    let status_span = if let Some(ref msg) = app.status_msg {
         Span::styled(
-            msg,
+            format!(" {}", msg),
             Style::default()
                 .fg(Color::LightGreen)
                 .add_modifier(Modifier::BOLD),
         )
     } else {
+        let toggle_hint = if app.show_shortcuts {
+            "[?] Ocultar barra de atajos"
+        } else {
+            "[?] Mostrar barra de atajos"
+        };
         Span::styled(
-            "herdr-quicknotes v0.1.0 • QuantumEdu",
+            format!(" herdr-quicknotes v0.1.0 • QuantumEdu  |  {}", toggle_hint),
             Style::default().fg(Color::DarkGray),
         )
     };
-    let footer = Paragraph::new(Line::from(vec![Span::raw(" "), status_text]));
+    footer_lines.push(Line::from(vec![status_span]));
+
+    let footer = Paragraph::new(footer_lines);
     f.render_widget(footer, chunks[2]);
 
     // Overlays / Popups for modal modes
@@ -432,7 +478,7 @@ fn ui(f: &mut Frame, app: &mut App) {
             f.render_widget(Clear, area);
             let block = Block::default()
                 .borders(Borders::ALL)
-                .title(" Nueva Nota: Título (Enter para continuar, Esc cancelar) ")
+                .title(" Nueva Nota: Título (Enter continuar, Esc cancelar) ")
                 .border_style(Style::default().fg(Color::Yellow));
             let input = Paragraph::new(app.new_title.as_str()).block(block);
             f.render_widget(input, area);
