@@ -1,0 +1,21 @@
+# herdr-plugin.toml — manifest for herdr-quicknotes
+id = "herdr-quicknotes"
+name = "herdr-quicknotes"
+version = "0.1.0"
+description = "Fast modal popup notes manager for Herdr with fuzzy search, CLI & clipboard support"
+min_herdr_version = "0.7.4"
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "notes-popup"
+title = "Quick Notes"
+placement = "popup"
+width = "75%"
+height = "75%"
+command = ["herdr-quicknotes", "popup"]
+
+[[actions]]
+id = "open"
+title = "Open Quick Notes"
+description = "Open interactive notes manager in a modal popup"
+command = ["herdr", "plugin", "pane", "open", "--plugin", "herdr-quicknotes", "--pane", "notes-popup"]
